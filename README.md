@@ -37,6 +37,7 @@ For python instructions, follow above, but use the `.py` versions in the `src` f
 - Alvare, scurest, Starkium, and other members of [VG-Resource Forums](https://www.vg-resource.com/thread-28564-page-28.html)
 - MeltyPlayer - [MeltyPlayer/OoT3D-Importer](https://github.com/MeltyPlayer/OoT3D-Importer) for the addon.
 - xdanieldzd and NishaWolfe for: [NishaWolfe/N3DSCmbViewer: Zelda OoT3D & MM3D .cmb model viewer](https://github.com/NishaWolfe/N3DSCmbViewer) - as the basis for my CSharp conversion to Python of LZSS decompressor.
+- Also [FinModelUtility/LzssDecompressor.cs](https://github.com/MeltyPlayer/FinModelUtility/blob/792c183a42761cc72f4a93dddff2faf607b9e309/FinModelUtility/UniversalModelExtractor/src/platforms/threeDs/tools/LzssDecompressor.cs) as basis for my Conversion.
 
 ---
 
