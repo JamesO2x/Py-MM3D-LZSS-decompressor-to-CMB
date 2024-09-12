@@ -1,5 +1,6 @@
 # Custom Ignore Files
 check_head_log.txt
+check_head_log.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

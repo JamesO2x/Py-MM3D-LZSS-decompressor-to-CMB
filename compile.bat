@@ -2,5 +2,4 @@
 @REM python -m py_compile zsi_conversion.py zsi_cleanup.py cmb_cleanup.py
 
 pyinstaller --onefile src\zsi_conversion.py
-pyinstaller --onefile src\zsi_cleanup.py
-pyinstaller --onefile src\cmb_cleanup.py
+pyinstaller --onefile src\junk_cleanup.py

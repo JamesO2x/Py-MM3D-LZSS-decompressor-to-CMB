@@ -1,4 +1,5 @@
 import os
+import sys
 from struct import * # gives us pack/unpack binary functions
 
 # This reads the first 4 bytes of a binary ZSI file,
@@ -13,8 +14,20 @@ from struct import * # gives us pack/unpack binary functions
 # ██║██║╚██╗██║██╔═══╝ ██║   ██║   ██║       ╚██╗ ██╔╝██╔══██║██╔══██╗╚════██║
 # ██║██║ ╚████║██║     ╚██████╔╝   ██║        ╚████╔╝ ██║  ██║██║  ██║███████║
 # ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝    ╚═╝         ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
-scanDir = '.'
+if getattr(sys, 'frozen', False):
+    # If the application is run as a bundle, the PyInstaller bootloader
+    # extends the sys module by a flag frozen=True and sets the app 
+    # path into variable _MEIPASS'.
+    app_path = os.path.dirname(sys.executable)
+else:
+    app_path = os.path.dirname(os.path.abspath(__file__))
 
+print(f"The script is running from: {app_path}")
+
+# Set path scan directory to the app path
+scan_directory = os.path.join(app_path,'place_zsi_files_here')
+logFile = os.path.join(app_path,'check_head_log.csv')
+log =['code, file, comment']
 
 # ██████╗ ███████╗███████╗██╗███╗   ██╗███████╗    ███████╗██╗   ██╗███╗   ██╗ ██████╗███████╗
 # ██╔══██╗██╔════╝██╔════╝██║████╗  ██║██╔════╝    ██╔════╝██║   ██║████╗  ██║██╔════╝██╔════╝
@@ -22,12 +35,9 @@ scanDir = '.'
 # ██║  ██║██╔══╝  ██╔══╝  ██║██║╚██╗██║██╔══╝      ██╔══╝  ██║   ██║██║╚██╗██║██║     ╚════██║
 # ██████╔╝███████╗██║     ██║██║ ╚████║███████╗    ██║     ╚██████╔╝██║ ╚████║╚██████╗███████║
 # ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝    ╚═╝      ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚══════╝
-logFile = 'check_head_log.txt'
-log =[]
-
 # Checks the file header if its LzS, ZSI, or CMB
 def check_head():
-    for root, dirs, files in os.walk(scanDir, topdown=False):
+    for root, dirs, files in os.walk(scan_directory, topdown=False):
         for file in files:
 
             # GET FILENAMES
@@ -57,14 +67,15 @@ def check_head():
                         print(f)
                         headTag = testFile.read(4) # first 4 bytes only
                         match headTag:
-                            case b'LzS\x01': log.append('LzS, ' + f)
-                            case b'ZSI\x09': log.append('ZSI, ' + f)
-                            case b'cmb\x20': log.append('cmb, ' + f)
-                            case _: log.append( str(headTag) + ', ' + f)
+                            case b'LzS\x01': log.append(f'LzS, {f}, # File uses MM3D ZSI header format with LZSS compression')
+                            case b'ZSI\x09': log.append(f'ZSI, {f}, # File uses MM3D ZSI header format')
+                            case b'ZSI\x01': log.append(f'ZSI, {f}, # File uses OoT3D ZSI header format')
+                            case b'cmb\x20': log.append(f'cmb, {f}, # File uses a decompressed CMB header format')
+                            case _: log.append( f'{str(headTag)}, {f}, # File uses an UNRECOGNIZED header format')
                 case _:
                     # action-default
                     print(' Unknown File Format')
-                    log.append('---, ' + f) # Not a ZSI file
+                    log.append( f'---, {f}, # File is not a ZSI map file or otherwise UNKNOWN format') # Not a ZSI file
 
     # Output LOG file
     with open(logFile, 'w+') as logDump:
@@ -77,21 +88,27 @@ def check_head():
 # Checks the file header if its LzS, ZSI, or CMB
 def read_logs():
     
-    with open(logFile, 'r') as testFile:
-        Lines = testFile.readlines()
-        count = 0
-        for line in Lines:
-            count += 1
-            print("Line{}: {}".format(count, line.strip()))
-            parts = line.strip().split(', ') # split line into two parts. First part is 3 char code, second part is a file path
+    with open(logFile, 'r') as f:
+        Lines = f.readlines()
 
-            match parts[0]:
+        for count, line in enumerate(Lines):
+            print(f"Line{count}: {line.strip()}")
+
+            # split line into two parts. First part is 3 char code, second part is a file path
+            # There is a thrid part, but its just a comment and not necessary
+            parts = line.strip().split(',')
+            header_code = parts[0]
+            file_path = os.path.join(parts[1].strip())
+
+            print(f' ######## HEADER_CODE: {header_code} | FILE_PATH: {file_path}')
+
+            match header_code:
                 case 'LzS':
-                    print('Do ZSI to CMB conversion')
-                    Decompress(os.path.join(parts[1])) # Use join here to make sure path is formatted correctly
+                    print('Do LZSS decompression')
+                    Decompress(file_path) # Use join here to make sure path is formatted correctly
                 case 'ZSI':
-                    print('Do LZSS decomp')
-                    zsi_to_cmb(os.path.join(parts[1])) # Use
+                    print('Do ZSI to CMB conversion')
+                    zsi_to_cmb(file_path) # Use join here to make sure path is formatted correctly
                 case _:
                     print('--- SKIP ---')
     print(' >>> Done >>> ')
@@ -99,8 +116,8 @@ def read_logs():
 # https://github.com/lue/MM3D/blob/master/src/lzs.cpp 
 def Decompress(filename):
     with open(filename, 'rb') as arcdata: # rb = read in Binary BYTE mode
-        #░█░█▄░█░█░▀█▀░░░█▒█▒▄▀▄▒█▀▄░▄▀▀
-        #░█░█▒▀█░█░▒█▒▒░░▀▄▀░█▀█░█▀▄▒▄██
+        # █ █▄ █ █ ▀█▀   █ █ ▄▀▄ █▀▄ ▄▀▀
+        # █ █ ▀█ █  █    ▀▄▀ █▀█ █▀▄ ▄██
         tag = arcdata.read(4).decode('ascii') # reads first 4 bytes
         unknown = arcdata.read(4) # Next 4 bytes are unknown
         decompressedSize = unpack('I', arcdata.read(4))[0] # Next 4 bytes contain a UInt32 of what the expected decompressed file size should be. Since "unpack" returns an array of values, we need to grab position [0] to get jsut the INTEGER
@@ -118,8 +135,8 @@ def Decompress(filename):
             h += 1
 
 
-        #░█▒░░▄▀▄░▄▀▄▒█▀▄░░░█▒█▒▄▀▄▒█▀▄░▄▀▀
-        #▒█▄▄░▀▄▀░▀▄▀░█▀▒▒░░▀▄▀░█▀█░█▀▄▒▄██
+        # █   ▄▀▄ ▄▀▄ █▀▄   █ █ ▄▀▄ █▀▄ ▄▀▀
+        # █▄▄ ▀▄▀ ▀▄▀ █▀    ▀▄▀ █▀█ █▀▄ ▄██
         flags8 = 0 # originally a BYTE, use INT here instead, as we'll need INT format for comparisons later
         writeidx = 4078 # 0xFEE, Index where we will write data to
         readidx = 0 # index to read data from
@@ -130,15 +147,15 @@ def Decompress(filename):
 
 
 
-        #▒█▀▄▒██▀▒▄▀▄░█▀▄░░░█▀▄▒▄▀▄░▀█▀▒▄▀▄
-        #░█▀▄░█▄▄░█▀█▒█▄▀▒░▒█▄▀░█▀█░▒█▒░█▀█
+        # █▀▄ ██▀ ▄▀▄ █▀▄   █▀▄ ▄▀▄ ▀█▀ ▄▀▄
+        # █▀▄ █▄▄ █▀█ █▄▀   █▄▀ █▀█  █  █▀█
         while fidx < arclength: # start looping through all the bytes
             arcdata.seek(fidx); arcRead = arcdata.read(1)
             flags8 = flags8.from_bytes(arcRead,"little") # get byte as INT, used for comparision later.
             fidx += 1
 
-            #▒█▀░█▒░▒▄▀▄░▄▀▒░▄▀▀░█▄█
-            #░█▀▒█▄▄░█▀█░▀▄█▒▄██░█▄█
+            # █▀ █   ▄▀▄ ▄▀  ▄▀▀ 
+            # █▀ █▄▄ █▀█ ▀▄█ ▄██ 
             for i in range(0, 8):
                 if (flags8 & 1) != 0:
                     arcdata.seek(fidx); arcRead = arcdata.read(1)
@@ -169,13 +186,13 @@ def Decompress(filename):
                 flags8 >>= 1
                 if fidx >= arclength: break
 
-        #░▄▀▀░█░▀█▀▒██▀░░░█▄▒▄█░█░▄▀▀░█▄▒▄█▒▄▀▄░▀█▀░▄▀▀░█▄█
-        #▒▄██░█░█▄▄░█▄▄▒░░█▒▀▒█░█▒▄██░█▒▀▒█░█▀█░▒█▒░▀▄▄▒█▒█
+        # ▄▀▀ █ ▀█▀ ██▀   █▄ ▄█ █ ▄▀▀ █▄ ▄█ ▄▀▄ ▀█▀ ▄▀▀ █▄█
+        # ▄██ █ █▄▄ █▄▄   █ ▀ █ █ ▄██ █ ▀ █ █▀█  █  ▀▄▄ █ █
         if decompressedSize != len(outdata):
             raise Exception("Size mismatch: got {0:s} bytes after decompression, expected {1:s}.\n".format(len(outdata), decompressedSize))
 
         # SAVE NEW FILE
-        decompFilename = os.path.splitext(filename)[0] + '.zsidecomp' # remove the extension, add new one
+        decompFilename = os.path.splitext(filename)[0] + '.zsi_lzs_decomp' # remove the extension, add new one
         with open(decompFilename, 'wb+') as outFile: # rb = read in Binary BYTE mode
             for k in outdata:
                 outFile.write(k)
@@ -197,18 +214,18 @@ def zsi_to_cmb(filename):
         datalength = os.stat(filename).st_size # get the file length
 
         match headTag:
-            case b'ZSI\x09': 
+            case b'ZSI\x09' | b'ZSI\x01': 
                 print(' >>> ZSI FORMAT FOUND')
 
-                #░█░█▄░█░█░▀█▀░░░█▒█▒▄▀▄▒█▀▄░▄▀▀
-                #░█░█▒▀█░█░▒█▒▒░░▀▄▀░█▀█░█▀▄▒▄██
+                # █ █▄ █ █ ▀█▀   █ █ ▄▀▄ █▀▄ ▄▀▀
+                # █ █ ▀█ █  █    ▀▄▀ █▀█ █▀▄ ▄██
                 unknown = bytedata.read(4) # Next 4 bytes are unknown
                 decompressedSize = unpack('I', bytedata.read(4))[0] # Next 4 bytes contain a UInt32 of what the expected decompressed file size should be. Since "unpack" returns an array of values, we need to grab position [0] to get jsut the INTEGER
                 compressedSize = unpack('I', bytedata.read(4))[0] # Next 4 bytes contain a UInt32 of what the expected compressed file size should be (little endian). This is used as a safety check when compressing/decompressing.
                 outdata = []
 
-                #▒█▀▄▒██▀▒▄▀▄░█▀▄░░░█▀▄▒▄▀▄░▀█▀▒▄▀▄
-                #░█▀▄░█▄▄░█▀█▒█▄▀▒░▒█▄▀░█▀█░▒█▒░█▀█
+                # █▀▄ ██▀ ▄▀▄ █▀▄   █▀▄ ▄▀▄ ▀█▀ ▄▀▄
+                # █▀▄ █▄▄ █▀█ █▄▀   █▄▀ █▀█  █  █▀█
                 # This loops through each byte, and checks 4 ahead to find the 'cmb\x20' byte range.
                 newDataFlag = False
                 while index < datalength: # start looping through all the bytes
@@ -247,6 +264,35 @@ def zsi_to_cmb(filename):
 # ██║  ██║██║   ██║    ██╔══██║██║        ██║   ██║██║   ██║██║╚██╗██║╚════██║
 # ██████╔╝╚██████╔╝    ██║  ██║╚██████╗   ██║   ██║╚██████╔╝██║ ╚████║███████║
 # ╚═════╝  ╚═════╝     ╚═╝  ╚═╝ ╚═════╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝
-check_head()
-read_logs()
-zsi_to_cmb()
+if __name__ == "__main__":
+
+    print('''
+#############################################
+#### ZSI TO CMB 3D MODEL FILE CONVERSOIN ####
+#############################################
+
+This script will convert any ZSI files to CMB, 
+and also remove LzSS compression if necessary.
+
+Follow these instructions:
+    1. Copy your ZSI files into the `place_zsi_files_here` folder
+    2. You can put your ZSI files in as many subfolders as you want,
+       this script will crawl down into all of the subfolders.
+    3. Simply press ENTER in this command prompt to start conversion.
+
+NOTE: Make sure you have a backup copy of your files stored
+      somewhere else on your computer before continuing.
+      This script/program modifies files, and thus can result in 
+      accidental data loss. This script/program is not intended for 
+      any particular purpose. Use at your own risk.
+
+This script will look for ZSI files in the following directory:
+''')
+    print(scan_directory)
+
+    user_action = input('\nPress ENTER to begin the Scan.')
+
+    check_head() # checks the headers of the files and creates a log file
+    read_logs() # reads the log file and processes each file on the list.
+
+    input('### Action Complete. You can close this terminal now.')
